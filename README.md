@@ -30,6 +30,13 @@ Accessible at `http://<host>:<port>` (default `http://127.0.0.1:5678`), or behin
 - **Config page** — view all active configuration values including environment variable values
 - **Responsive layout** — works on desktop and mobile browsers; hamburger menu on mobile
 
+### Screenshots
+<img width="1499" height="961" alt="Screenshot 2026-04-15 at 20 21 32" src="https://github.com/user-attachments/assets/01b79385-c746-4d05-9dbb-7d87089ee475" />
+
+<img width="1494" height="959" alt="Screenshot 2026-04-15 at 20 21 43" src="https://github.com/user-attachments/assets/539476e9-3c3e-4158-ad53-84237c345356" />
+
+<img width="1496" height="935" alt="Screenshot 2026-04-15 at 20 21 57" src="https://github.com/user-attachments/assets/2b0e6ba3-adfd-4b7d-aea0-9def480dabc0" />
+
 ---
 
 ## Installation
