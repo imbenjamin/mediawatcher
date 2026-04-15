@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MediaWatcher</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="app">
+<div class="topbar">
+  <div class="topbar-brand">
+    <span style="font-size:20px;line-height:1">🛃</span>
+    MediaWatcher
+  </div>
+  <div class="topbar-right">
+    <span class="status-dot" id="conn-dot-top"></span>
+    <button class="btn-hamburger" onclick="openSidebar()" aria-label="Menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
+</div>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span style="font-size:20px;line-height:1">🛃</span>
+      <span>MediaWatcher</span>
+    <button class="brand-close" onclick="closeSidebar()" aria-label="Close menu">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    </div>
+
+    {% if dry_run %}
+    <div class="dry-run-banner">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      DRY RUN MODE
+    </div>
+    {% endif %}
+
+    <nav>
+      <a href="{{ url_for('index') }}" class="nav-item active">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="{{ url_for('config_page') }}" class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        Config
+      </a>
+    </nav>
+
+    <div class="sidebar-section">
+      <div class="section-label">Watching</div>
+      {% if watch_dirs %}
+        {% for d in watch_dirs %}
+        {% set dp = d.path if d is mapping else d %}
+        {% set dir_pipeline = d.pipeline if d is mapping and d.pipeline is defined else none %}
+        <div class="watch-dir-block">
+          <div class="watch-dir" title="{{ dp }}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            {{ dp.split('/')[-1] or dp }}
+          </div>
+          {% if dir_pipeline %}
+          <div class="watch-dir-pipeline">
+            {% for script in dir_pipeline %}
+            <div class="pipeline-step">
+              <span class="step-num">{{ loop.index }}</span>
+              <span class="step-name">{{ script.split(' ')[0] }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="watch-dir muted">None configured</div>
+      {% endif %}
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-label">Default Pipeline</div>
+      {% for script in pipeline %}
+      <div class="pipeline-step">
+        <span class="step-num">{{ loop.index }}</span>
+        <span class="step-name">{{ script.split(' ')[0] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="status-dot-row">
+      <span class="status-dot" id="conn-dot"></span>
+      <span id="conn-label">Connecting…</span>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="content">
+    <!-- Live output panel -->
+    <section class="panel live-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="live-badge" id="live-badge">IDLE</span>
+          Live Output
+        </div>
+        <div class="panel-actions">
+          <span id="current-file" class="current-file"></span>
+          <button class="btn-ghost" onclick="clearLive()">Clear</button>
+          <label class="toggle-label">
+            <input type="checkbox" id="autoscroll" checked>
+            Auto-scroll
+          </label>
+        </div>
+      </div>
+      <div class="log-viewport" id="live-log">
+        <div class="log-placeholder">Waiting for pipeline activity…</div>
+      </div>
+    </section>
+
+    <div class="resize-handle" id="resize-handle"><div class="resize-handle-bar"></div></div>
+
+    <!-- Job history -->
+    <section class="panel history-panel">
+      <div class="panel-header">
+        <div class="panel-title">Recent Jobs</div>
+        <button class="btn-ghost" onclick="refreshJobs()">↻ Refresh</button>
+      </div>
+      <div id="jobs-table-wrap">
+        {% include '_jobs_table.html' %}
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+function openSidebar() {
+  document.querySelector('.sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+const topDot = document.getElementById('conn-dot-top');
+const sideDot = document.getElementById('conn-dot');
+if (topDot && sideDot) {
+  new MutationObserver(() => { topDot.className = sideDot.className; })
+    .observe(sideDot, { attributes: true });
+}
+</script>
+</body>
+</html>

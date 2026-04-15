@@ -1,0 +1,63 @@
+{% if jobs %}
+<table class="jobs-table">
+  <thead>
+    <tr>
+      <th class="col-hide-sm">#</th>
+      <th>File</th>
+      <th>Status</th>
+      <th>Steps</th>
+      <th class="col-hide-sm">Queued</th>
+      <th class="col-hide-sm">Duration</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody id="jobs-tbody">
+    {% for job in jobs %}
+    <tr class="job-row job-{{ job.status }}" data-job-id="{{ job.id }}">
+      <td class="job-id col-hide-sm">{{ job.id }}</td>
+      <td class="job-file" title="{{ job.file_path }}">{{ job.file_path.split('/')[-1] }}</td>
+      <td class="job-status">
+        <span class="badge badge-{{ job.status }}">
+          {% if job.status == 'running' %}
+            <span class="spinner"></span>
+          {% elif job.status == 'done' %}✓
+          {% elif job.status == 'failed' %}✗
+          {% elif job.status == 'interrupted' %}⏸
+          {% elif job.status == 'cancelled' %}✕
+          {% else %}⏳
+          {% endif %}
+          {{ job.status }}
+        </span>
+      </td>
+      <td class="job-steps">
+        {% if job.total_steps > 0 %}
+          {{ job.current_step }}/{{ job.total_steps }}
+          <div class="step-bar">
+            <div class="step-fill" style="width:{{ (job.current_step / job.total_steps * 100)|int }}%"></div>
+          </div>
+        {% else %}—{% endif %}
+      </td>
+      <td class="job-time col-hide-sm">{{ job.queued_at | replace('T',' ') | replace('Z','') }}</td>
+      <td class="job-dur col-hide-sm" id="dur-{{ job.id }}">
+        {% if job.finished_at and job.started_at %}
+          {{ ((job.finished_at[:19] | string) ) }}
+        {% elif job.status == 'running' %}
+          <span class="running-timer" data-start="{{ job.started_at }}">…</span>
+        {% else %}—{% endif %}
+      </td>
+      <td style="white-space:nowrap">
+        <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn-ghost btn-sm">Logs</a>
+        {% if job.status not in ('running', 'queued') %}
+        <button class="btn-ghost btn-sm" onclick="rerunJob({{ job.id }}, this)">↻</button>
+        {% endif %}
+        {% if job.status == 'queued' %}
+        <button class="btn-ghost btn-sm btn-cancel" onclick="cancelJob({{ job.id }}, this)">✕</button>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">No jobs yet. Drop an MKV into a watched directory to get started.</div>
+{% endif %}

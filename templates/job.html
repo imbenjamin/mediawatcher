@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job #{{ job.id }} — MediaWatcher</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="app">
+<div class="topbar">
+  <div class="topbar-brand">
+    <span style="font-size:20px;line-height:1">🛃</span>
+    MediaWatcher
+  </div>
+  <div class="topbar-right">
+    <span class="status-dot" id="conn-dot-top"></span>
+    <button class="btn-hamburger" onclick="openSidebar()" aria-label="Menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
+</div>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+  <aside class="sidebar">
+    <div class="brand">
+      <span style="font-size:20px;line-height:1">🛃</span>
+      <span>MediaWatcher</span>
+    <button class="brand-close" onclick="closeSidebar()" aria-label="Close menu">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    </div>
+    <nav>
+      <a href="{{ url_for('index') }}" class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="{{ url_for('config_page') }}" class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        Config
+      </a>
+    </nav>
+
+    <!-- Job metadata -->
+    <div class="sidebar-section">
+      <div class="section-label">Job #{{ job.id }}</div>
+      <div class="meta-row"><span>Status</span><span class="badge badge-{{ job.status }}">{{ job.status }}</span></div>
+      <div class="meta-row"><span>Step</span><span>{{ job.current_step }}/{{ job.total_steps }}</span></div>
+      {% if job.queued_at %}<div class="meta-row"><span>Queued</span><span class="meta-time">{{ job.queued_at }}</span></div>{% endif %}
+      {% if job.started_at %}<div class="meta-row"><span>Started</span><span class="meta-time">{{ job.started_at }}</span></div>{% endif %}
+      {% if job.finished_at %}<div class="meta-row"><span>Finished</span><span class="meta-time">{{ job.finished_at }}</span></div>{% endif %}
+    </div>
+
+    {% if job.error_msg %}
+    <div class="sidebar-section">
+      <div class="section-label">Error</div>
+      <div class="error-msg">{{ job.error_msg }}</div>
+    </div>
+    {% endif %}
+
+    <!-- Pipeline steps -->
+    <div class="sidebar-section">
+      <div class="section-label">Pipeline</div>
+      {% for script in pipeline %}
+      <div class="pipeline-step {% if job.status == 'done' or loop.index < job.current_step %}done{% elif loop.index == job.current_step %}active{% endif %}">
+        <span class="step-num">
+          {% if job.status == 'done' or loop.index < job.current_step %}✓
+          {% elif loop.index == job.current_step and job.status == 'running' %}▶
+          {% elif loop.index == job.current_step and job.status == 'failed' %}✗
+          {% else %}{{ loop.index }}{% endif %}
+        </span>
+        <span class="step-name">{{ script.split(' ')[0] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </aside>
+
+  <main class="content scrollable">
+    <section class="panel job-detail-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          {% if job.status == 'running' %}
+          <span class="live-badge">LIVE</span>
+          {% endif %}
+          {{ job.file_path.split('/')[-1] }}
+        </div>
+        <div class="panel-actions">
+          <span class="muted path-display" title="{{ job.file_path }}">{{ job.file_path }}</span>
+          {% if job.status not in ('running', 'queued') %}
+          <button class="btn-ghost" onclick="rerunJob({{ job.id }})">↻ Re-run</button>
+          {% endif %}
+          <label class="toggle-label">
+            <input type="checkbox" id="autoscroll" checked>
+            Auto-scroll
+          </label>
+        </div>
+      </div>
+      <div class="log-viewport" id="job-log">
+        {% set cur_step = 0 %}
+        {% for entry in logs %}
+          {% if entry.step != cur_step %}
+            {% set cur_step = entry.step %}
+          {% endif %}
+          <div class="log-line {% if '✗' in entry.line or 'error' in entry.line.lower() %}line-error{% elif '✓' in entry.line or 'successfully' in entry.line.lower() %}line-ok{% elif entry.line.startswith('──') or entry.line.startswith('==') %}line-header{% endif %}">{{ entry.line }}</div>
+        {% else %}
+          <div class="log-placeholder">No log output yet.</div>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
+</div>
+
+{% if job.status == 'running' %}
+<script>
+// Live-update job logs via SSE
+const logEl = document.getElementById('job-log');
+const autoscroll = document.getElementById('autoscroll');
+const jobId = {{ job.id }};
+
+const es = new EventSource("{{ url_for('stream') }}");
+es.onmessage = (e) => {
+  const evt = JSON.parse(e.data);
+  if (evt.job_id !== jobId) return;
+  if (evt.type === 'log' || evt.type === 'ok' || evt.type === 'error' ||
+      evt.type === 'info' || evt.type === 'step_start' || evt.type === 'separator') {
+    const line = evt.line || '';
+    const div = document.createElement('div');
+    div.className = 'log-line' +
+      (evt.type === 'error' || line.includes('✗') ? ' line-error' : '') +
+      (evt.type === 'ok' || line.includes('✓') ? ' line-ok' : '') +
+      (line.startsWith('──') || line.startsWith('==') ? ' line-header' : '');
+    div.textContent = line;
+    const placeholder = logEl.querySelector('.log-placeholder');
+    if (placeholder) placeholder.remove();
+    logEl.appendChild(div);
+    if (autoscroll.checked) logEl.scrollTop = logEl.scrollHeight;
+  }
+  if (evt.type === 'job_done') {
+    es.close();
+    setTimeout(() => location.reload(), 1500);
+  }
+};
+</script>
+{% else %}
+<script>
+// Static page: just scroll to bottom
+const logEl = document.getElementById('job-log');
+logEl.scrollTop = logEl.scrollHeight;
+document.getElementById('autoscroll').addEventListener('change', function() {
+  if (this.checked) logEl.scrollTop = logEl.scrollHeight;
+});
+</script>
+{% endif %}
+<script>
+async function rerunJob(jobId) {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Queuing…';
+  try {
+    const resp = await fetch(`{{ url_for('api_rerun', job_id=0) }}`.replace('/0/', `/${jobId}/`), { method: 'POST' });
+    const data = await resp.json();
+    if (data.error) {
+      alert(data.error);
+      btn.disabled = false;
+      btn.textContent = '↻ Re-run';
+    } else {
+      window.location.href = "{{ url_for('index') }}";
+    }
+  } catch(e) {
+    alert('Request failed: ' + e);
+    btn.disabled = false;
+    btn.textContent = '↻ Re-run';
+  }
+}
+function openSidebar() {
+  document.querySelector('.sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+const topDot = document.getElementById('conn-dot-top');
+const sideDot = document.getElementById('conn-dot');
+if (topDot && sideDot) {
+  new MutationObserver(() => { topDot.className = sideDot.className; })
+    .observe(sideDot, { attributes: true });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.user.mediawatcher.plist
+  ───────────────────────────
+  Install to: ~/Library/LaunchAgents/com.user.mediawatcher.plist
+  Then:
+    launchctl load   ~/Library/LaunchAgents/com.user.mediawatcher.plist
+    launchctl start  com.user.mediawatcher
+
+  Stop:
+    launchctl stop   com.user.mediawatcher
+  Uninstall:
+    launchctl unload ~/Library/LaunchAgents/com.user.mediawatcher.plist
+
+  BEFORE INSTALLING:
+    1. Replace INSTALL_DIR below with the actual path to mediawatcher/
+    2. Replace PYTHON3_PATH with output of: which python3
+    3. Set your env vars (TMDB_API_TOKEN etc.)
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.user.mediawatcher</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <!-- Replace with: which python3 -->
+    <string>PYTHON3_PATH</string>
+    <string>INSTALL_DIR/mediawatcher.py</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>INSTALL_DIR</string>
+
+  <!-- Environment variables passed to the scripts -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <!-- Uncomment and fill in as needed:
+    <key>TMDB_API_TOKEN</key>
+    <string>your_token_here</string>
+    <key>TMDB_TOKEN</key>
+    <string>your_token_here</string>
+    <key>JELLYFIN_URL</key>
+    <string>http://localhost:8096</string>
+    <key>JELLYFIN_TOKEN</key>
+    <string>your_token_here</string>
+    -->
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Throttle rapid restarts -->
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <!-- Log output -->
+  <key>StandardOutPath</key>
+  <string>INSTALL_DIR/logs/stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>INSTALL_DIR/logs/stderr.log</string>
+</dict>
+</plist>
