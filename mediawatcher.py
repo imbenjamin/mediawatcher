@@ -729,10 +729,21 @@ def stream():
     )
 
 
+_SECRET_ENV_RE = re.compile(r"TOKEN|KEY|SECRET|PASSWORD|PASS", re.IGNORECASE)
+
+
+def _display_env_value(key: str, val):
+    """Mask secret-looking env values so they never reach the web UI."""
+    if not val or not _SECRET_ENV_RE.search(key):
+        return val
+    return "set (••••%s)" % val[-4:] if len(val) > 8 else "set (hidden)"
+
+
 @app.route("/config")
 def config_page():
     env_values = {
-        key: os.environ.get(key) for key in CFG.get("env_passthrough", [])
+        key: _display_env_value(key, os.environ.get(key))
+        for key in CFG.get("env_passthrough", [])
     }
     return render_template("config.html", cfg=CFG, config_path=str(CONFIG_FILE),
                            dry_run=CFG.get("dry_run", False),
