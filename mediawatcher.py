@@ -549,29 +549,75 @@ class MKVHandler(FileSystemEventHandler):
             self._schedule(event.dest_path)
 
 
+WATCH_RECHECK_SECS = 30
+
+
+def _reconcile_watches(observer, handler, watches: dict, missing: set):
+    """Schedule watch dirs that have appeared; reschedule ones whose volume was remounted.
+
+    External volumes (e.g. a USB drive) often mount after the service starts at
+    boot, and an FSEvents stream on an unmounted path goes dead, so this runs
+    periodically rather than once at startup.
+    """
+    for entry in CFG.get("watch_dirs", []):
+        d = entry["path"] if isinstance(entry, dict) else entry
+        pipeline = entry.get("pipeline") if isinstance(entry, dict) else None
+        dp = Path(d).expanduser()
+        key = str(dp)
+        try:
+            dev = dp.stat().st_dev if dp.is_dir() else None
+        except OSError:
+            dev = None
+
+        current = watches.get(key)
+        if current and current[1] != dev:
+            try:
+                observer.unschedule(current[0])
+            except Exception:
+                pass
+            del watches[key]
+            log.warning("Watch dir unmounted or replaced, dropping watch: %s", dp)
+
+        if dev is None:
+            if key not in missing:
+                log.warning("Watch dir does not exist (will keep checking every %ds): %s",
+                            WATCH_RECHECK_SECS, dp)
+                missing.add(key)
+            continue
+
+        if key not in watches:
+            watches[key] = (observer.schedule(handler, key, recursive=True), dev)
+            missing.discard(key)
+            if pipeline:
+                log.info("Watching: %s (custom pipeline: %d steps)", dp, len(pipeline))
+            else:
+                log.info("Watching: %s (default pipeline)", dp)
+
+
 def start_watchers():
     observer = Observer()
     handler = MKVHandler(settle_secs=CFG["settle_seconds"])
-    watch_dirs = CFG.get("watch_dirs", [])
 
-    if not watch_dirs:
+    if not CFG.get("watch_dirs", []):
         log.warning("No watch_dirs configured — watcher is idle.")
         log.warning("Add directories to config.json and restart.")
-    else:
-        for entry in watch_dirs:
-            d = entry["path"] if isinstance(entry, dict) else entry
-            pipeline = entry.get("pipeline") if isinstance(entry, dict) else None
-            dp = Path(d).expanduser()
-            if dp.is_dir():
-                observer.schedule(handler, str(dp), recursive=True)
-                if pipeline:
-                    log.info("Watching: %s (custom pipeline: %d steps)", dp, len(pipeline))
-                else:
-                    log.info("Watching: %s (default pipeline)", dp)
-            else:
-                log.warning("Watch dir does not exist (skipping): %s", dp)
+        observer.start()
+        return observer
 
+    watches = {}
+    missing = set()
+    _reconcile_watches(observer, handler, watches, missing)
     observer.start()
+
+    def recheck_loop():
+        while observer.is_alive():
+            time.sleep(WATCH_RECHECK_SECS)
+            try:
+                _reconcile_watches(observer, handler, watches, missing)
+            except Exception:
+                log.exception("Error re-checking watch dirs")
+
+    threading.Thread(target=recheck_loop, daemon=True, name="watch-recheck").start()
     return observer
 
 
