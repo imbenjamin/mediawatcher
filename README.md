@@ -47,6 +47,16 @@ Accessible at `http://<host>:<port>` (default `http://127.0.0.1:5678`), or behin
 - Python 3.8+
 - Your pipeline shell scripts in a directory (see `scripts_dir` in config)
 
+### Create your config
+
+The service needs a `config.json` next to `mediawatcher.py`. It isn't tracked in git, so copy the example and edit it before installing:
+
+```bash
+cp config.example.json config.json
+```
+
+Then set `watch_dirs`, `scripts_dir` and `pipeline` for your setup (see [Configuration](#configuration)).
+
 ### Quick install
 
 ```bash
@@ -102,7 +112,7 @@ launchctl load   ~/Library/LaunchAgents/com.user.mediawatcher.plist
 
 ## Configuration
 
-Edit `config.json` next to `mediawatcher.py` and restart the service to apply changes.
+Edit `config.json` next to `mediawatcher.py` (created from `config.example.json` — see [Create your config](#create-your-config)) and restart the service to apply changes.
 
 ### Full example
 
@@ -363,7 +373,8 @@ Waitress WSGI server (16 threads)
 ```
 mediawatcher/
 ├── mediawatcher.py              # Main daemon (watcher + queue + web server)
-├── config.json                  # Your configuration (edit this)
+├── config.example.json          # Example configuration (copy to config.json)
+├── config.json                  # Your configuration (not tracked in git)
 ├── install.sh                   # One-shot installer
 ├── com.user.mediawatcher.plist  # launchd service definition
 ├── README.md                    # This file
